@@ -228,6 +228,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   padding: 10px 14px;
   margin-top: 12px;
   display: none;
+  word-break: break-word;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1077,7 +1078,7 @@ document.getElementById("login-btn").addEventListener("click", async () => {
   const username = document.getElementById("login-username").value.trim();
   const password = document.getElementById("login-password").value;
   const errEl    = document.getElementById("login-error");
-  if (!username || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = ""; return; }
+  if (!username || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = "block"; return; }
 
   const d = await doAuth("/login", { username, password }, errEl, document.getElementById("login-btn"));
   if (d.success) {
@@ -1085,7 +1086,7 @@ document.getElementById("login-btn").addEventListener("click", async () => {
     initChat();
   } else {
     errEl.textContent = d.message;
-    errEl.style.display = "";
+    errEl.style.display = "block";
   }
 });
 
@@ -1094,8 +1095,8 @@ document.getElementById("signup-btn").addEventListener("click", async () => {
   const email    = document.getElementById("signup-email").value.trim();
   const password = document.getElementById("signup-password").value;
   const errEl    = document.getElementById("signup-error");
-  if (!username || !email || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = ""; return; }
-  if (password.length < 8) { errEl.textContent = "Password must be 8+ characters"; errEl.style.display = ""; return; }
+  if (!username || !email || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = "block"; return; }
+  if (password.length < 6) { errEl.textContent = "Password must be 6+ characters"; errEl.style.display = "block"; return; }
 
   const d = await doAuth("/signup", { username, email, password }, errEl, document.getElementById("signup-btn"));
   if (d.success) {
@@ -1104,7 +1105,7 @@ document.getElementById("signup-btn").addEventListener("click", async () => {
     document.getElementById("login-username").value = username;
   } else {
     errEl.textContent = d.message;
-    errEl.style.display = "";
+    errEl.style.display = "block";
   }
 });
 
