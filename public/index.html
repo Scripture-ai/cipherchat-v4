@@ -1,60 +1,1523 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CipherChat</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>CipherChat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════════════ */
+:root {
+  --bg:         #09090f;
+  --surface:    #0f0f1a;
+  --surface2:   #15151f;
+  --surface3:   #1c1c2a;
+  --border:     rgba(120,80,255,0.18);
+  --border2:    rgba(120,80,255,0.08);
+  --accent:     #7c4dff;
+  --accent2:    #b47cff;
+  --accent-glow:rgba(124,77,255,0.35);
+  --green:      #00e5a0;
+  --green-dim:  rgba(0,229,160,0.12);
+  --red:        #ff4d6a;
+  --red-dim:    rgba(255,77,106,0.12);
+  --text:       #e8e8f5;
+  --text-dim:   #7a7a9a;
+  --text-muted: #3e3e58;
+  --radius:     14px;
+  --radius-sm:  8px;
+  --font:       'Space Grotesk', sans-serif;
+  --mono:       'Space Mono', monospace;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESET
+═══════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+/* ═══════════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ═══════════════════════════════════════════════════
+   AUTH SCREEN
+═══════════════════════════════════════════════════ */
+#auth-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Ambient grid */
+#auth-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(124,77,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,77,255,0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Glow orb */
+#auth-screen::after {
+  content: '';
+  position: absolute;
+  top: -200px; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(124,77,255,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-card {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 48px 40px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 80px rgba(124,77,255,0.08), 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.auth-logo .logo-icon {
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 32px var(--accent-glow);
+}
+
+.auth-logo h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--text) 60%, var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-logo p {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+.tab-row {
+  display: flex;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin-bottom: 28px;
+  gap: 4px;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.tab-btn.active {
+  background: var(--surface3);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+
+.field input {
+  width: 100%;
+  padding: 13px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.field input::placeholder { color: var(--text-muted); }
+
+.auth-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent), #5c35cc);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all .2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--accent-glow); }
+.auth-btn:active { transform: translateY(0); }
+
+.auth-btn.loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer .8s infinite;
+}
+@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+
+.auth-error {
+  font-size: 13px;
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px solid rgba(255,77,106,0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   CHAT LAYOUT
+═══════════════════════════════════════════════════ */
+#chat-screen {
+  display: none;
+  height: 100vh;
+  width: 100vw;
+  flex-direction: row;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.sidebar-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--border2);
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sidebar-logo .s-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 16px var(--accent-glow);
+  flex-shrink: 0;
+}
+
+.sidebar-logo span {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.me-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.online-dot {
+  width: 8px; height: 8px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--green);
+  flex-shrink: 0;
+}
+
+.me-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 6px;
+  transition: color .2s, background .2s;
+}
+.logout-btn:hover { color: var(--red); background: var(--red-dim); }
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  padding: 16px 20px 8px;
+}
+
+.users-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 10px 10px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s;
+  position: relative;
+}
+
+.user-item:hover { background: var(--surface2); }
+.user-item.active { background: rgba(124,77,255,0.12); }
+
+.user-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #3a1fa0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.user-avatar .status-dot {
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 10px; height: 10px;
+  background: var(--green);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+}
+
+.user-info { flex: 1; overflow: hidden; }
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-status { font-size: 12px; color: var(--green); }
+
+/* ─── Chat main ─────────────────────────────────────────── */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  position: relative;
+}
+
+/* Subtle grid on chat bg */
+.chat-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(124,77,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,77,255,0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+/* No-chat placeholder */
+.no-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  position: relative;
+  z-index: 1;
+}
+.no-chat .nc-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.5; }
+.no-chat p { font-size: 15px; }
+.no-chat small { font-size: 12px; font-family: var(--mono); margin-top: 6px; color: var(--text-muted); }
+
+/* Chat header */
+.chat-header {
+  padding: 0 24px;
+  height: 64px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.chat-header .h-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #3a1fa0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.chat-header .h-info { flex: 1; }
+.chat-header .h-name { font-size: 15px; font-weight: 600; }
+.chat-header .h-sub  { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+
+.header-badge {
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(0,229,160,0.2);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* Messages area */
+.messages-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Message bubble */
+.msg-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 72%;
+  animation: msgIn .25s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg-wrap.mine  { align-self: flex-end; align-items: flex-end; }
+.msg-wrap.theirs{ align-self: flex-start; align-items: flex-start; }
+
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  position: relative;
+  word-break: break-word;
+}
+
+.msg-wrap.mine .msg-bubble {
+  background: linear-gradient(135deg, var(--accent), #5c35cc);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.msg-wrap.theirs .msg-bubble {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+.msg-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+/* Self-destruct timer bar */
+.destruct-bar {
+  height: 2px;
+  background: rgba(255,77,106,0.3);
+  border-radius: 2px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+.destruct-bar-fill {
+  height: 100%;
+  background: var(--red);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+/* Vanish animation */
+@keyframes vanish {
+  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
+  50%  { opacity: 0.5; transform: scale(0.95); filter: blur(2px); }
+  100% { opacity: 0; transform: scale(0.9); filter: blur(8px); height: 0; margin: 0; padding: 0; }
+}
+
+.msg-wrap.vanishing {
+  animation: vanish .5s ease-out forwards;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Typing indicator */
+.typing-indicator {
+  align-self: flex-start;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+  display: none;
+  gap: 4px;
+  align-items: center;
+}
+.typing-indicator.visible { display: flex; }
+.typing-dot {
+  width: 6px; height: 6px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  animation: typingPulse 1.2s infinite;
+}
+.typing-dot:nth-child(2){ animation-delay: .2s; }
+.typing-dot:nth-child(3){ animation-delay: .4s; }
+@keyframes typingPulse {
+  0%,80%,100% { opacity: .3; transform: scale(0.8); }
+  40%          { opacity: 1;  transform: scale(1);   }
+}
+
+/* Input row */
+.input-row {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.input-wrap {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px 14px;
+  gap: 8px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+#msg-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  resize: none;
+  max-height: 120px;
+  line-height: 1.5;
+}
+#msg-input::placeholder { color: var(--text-muted); }
+
+.emoji-trigger {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity .2s, transform .2s;
+  padding: 2px;
+  line-height: 1;
+}
+.emoji-trigger:hover { opacity: 1; transform: scale(1.15); }
+
+.send-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #5c35cc);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform .15s, box-shadow .15s;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.send-btn:hover { transform: scale(1.08); }
+.send-btn:active{ transform: scale(0.95); }
+.send-btn svg { width: 20px; height: 20px; }
+
+/* ═══════════════════════════════════════════════════
+   EMOJI PICKER
+═══════════════════════════════════════════════════ */
+.emoji-picker {
+  position: absolute;
+  bottom: 76px;
+  left: 20px;
+  width: 340px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  z-index: 100;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  animation: pickerIn .2s cubic-bezier(.34,1.56,.64,1);
+}
+.emoji-picker.open { display: flex; }
+@keyframes pickerIn {
+  from { opacity: 0; transform: scale(0.9) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.emoji-search {
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border2);
+}
+.emoji-search input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+}
+.emoji-search input:focus { border-color: var(--accent); }
+.emoji-search input::placeholder { color: var(--text-muted); }
+
+.emoji-cats {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 0;
+  overflow-x: auto;
+}
+.emoji-cats::-webkit-scrollbar { display: none; }
+.cat-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.cat-btn:hover, .cat-btn.active { background: var(--surface2); opacity: 1; }
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px 10px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.e-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: background .1s, transform .1s;
+  line-height: 1;
+}
+.e-btn:hover { background: var(--surface2); transform: scale(1.25); }
+
+/* Freq row */
+.emoji-recents {
+  padding: 6px 10px 0;
+  border-bottom: 1px solid var(--border2);
+  min-height: 0;
+}
+.emoji-recents-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+.emoji-recents-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+/* ═══════════════════════════════════════════════════
+   TOAST / SYSTEM MESSAGES
+═══════════════════════════════════════════════════ */
+.sys-msg {
+  align-self: center;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* Snackbar */
+#snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 9999;
+  transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+  white-space: nowrap;
+}
+#snackbar.show { transform: translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════════════════════════
+   MOBILE
+═══════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+  .sidebar { display: none; }
+  .sidebar.open {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    z-index: 50;
+  }
+  .emoji-picker { width: calc(100vw - 24px); left: 12px; }
+}
+</style>
 </head>
 <body>
 
-<div class="background"></div>
-
-<div class="login-screen" id="loginScreen">
-    <div class="glass-card">
-        <h1>CIPHERCHAT</h1>
-        <p>Secure End-to-End Messaging</p>
-
-        <input id="username" placeholder="Username">
-        <input id="email" placeholder="Email (signup only)">
-        <input id="password" type="password" placeholder="Password">
-
-        <button onclick="signup()">Sign Up</button>
-        <button onclick="login()">Login</button>
+<!-- ══════════════════════════════════════════════
+     AUTH SCREEN
+══════════════════════════════════════════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-icon">🔐</div>
+      <h1>CipherChat</h1>
+      <p>end-to-end encrypted · ephemeral messages</p>
     </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" data-tab="login">Sign In</button>
+      <button class="tab-btn" data-tab="signup">Create Account</button>
+    </div>
+
+    <!-- Login -->
+    <div id="login-form">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="login-username" placeholder="your_handle" autocomplete="username"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="auth-btn" id="login-btn">Sign In</button>
+      <div class="auth-error" id="login-error"></div>
+    </div>
+
+    <!-- Signup -->
+    <div id="signup-form" style="display:none">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="signup-username" placeholder="choose_a_handle" autocomplete="username"/>
+      </div>
+      <div class="field">
+        <label>Email — for account recovery</label>
+        <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="min. 8 characters" autocomplete="new-password"/>
+      </div>
+      <button class="auth-btn" id="signup-btn">Create Account</button>
+      <div class="auth-error" id="signup-error"></div>
+    </div>
+  </div>
 </div>
 
-<div class="chat-screen hidden" id="chatScreen">
-    <div class="chat-wrapper">
+<!-- ══════════════════════════════════════════════
+     CHAT SCREEN
+══════════════════════════════════════════════════ -->
+<div id="chat-screen">
 
-        <div class="topbar">
-            <div>
-                <h2>CipherChat Secure Link</h2>
-                <p id="presence">Connecting...</p>
-            </div>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="s-icon">🔐</div>
+        <span>CipherChat</span>
+      </div>
+      <div class="me-badge">
+        <div class="online-dot"></div>
+        <span class="me-name" id="me-label">—</span>
+        <button class="logout-btn" id="logout-btn" title="Sign out">✕</button>
+      </div>
+    </div>
 
-            <div>
-                <button onclick="setPasskey()">Passkey</button>
-                <button onclick="logout()">Logout</button>
-                <button class="panic-btn" onclick="panic()">PANIC</button>
-            </div>
+    <div class="sidebar-section-label">Online now</div>
+    <div class="users-list" id="users-list"></div>
+  </aside>
+
+  <!-- Main chat -->
+  <main class="chat-main" id="chat-main">
+
+    <!-- No chat selected -->
+    <div class="no-chat" id="no-chat">
+      <div class="nc-icon">💬</div>
+      <p>Select a contact to start chatting</p>
+      <small>AES-256 encrypted · messages self-destruct</small>
+    </div>
+
+    <!-- Active chat (hidden until contact selected) -->
+    <div id="active-chat" style="display:none; flex:1; display:none; flex-direction:column; height:100%">
+
+      <div class="chat-header" id="chat-header">
+        <div class="h-avatar" id="h-avatar">?</div>
+        <div class="h-info">
+          <div class="h-name" id="h-name">—</div>
+          <div class="h-sub" id="h-sub">select a contact</div>
         </div>
+        <div class="header-badge">🔒 E2E</div>
+      </div>
 
-        <div id="messages" class="messages"></div>
-
-        <div class="chat-controls">
-            <input id="recipient" placeholder="Send to username">
-            <input id="timer" type="number" placeholder="Destruct (sec)">
-            <textarea id="message" placeholder="Transmit secure message..."></textarea>
-            <button onclick="send()">SEND</button>
+      <div class="messages-area" id="messages-area">
+        <div class="sys-msg">Messages are encrypted and self-destruct after 60 seconds 🔥</div>
+        <div class="typing-indicator" id="typing-indicator">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
         </div>
+      </div>
+
+      <!-- Emoji picker -->
+      <div class="emoji-picker" id="emoji-picker">
+        <div class="emoji-search">
+          <input type="text" id="emoji-search-input" placeholder="Search emoji…"/>
+        </div>
+        <div id="emoji-recents-section" class="emoji-recents" style="display:none">
+          <div class="emoji-recents-label">Recently used</div>
+          <div class="emoji-recents-row" id="emoji-recents-row"></div>
+        </div>
+        <div class="emoji-cats" id="emoji-cats"></div>
+        <div class="emoji-grid" id="emoji-grid"></div>
+      </div>
+
+      <!-- Input -->
+      <div class="input-row">
+        <div class="input-wrap">
+          <button class="emoji-trigger" id="emoji-trigger" title="Emoji">😊</button>
+          <textarea id="msg-input" rows="1" placeholder="Type a message…"></textarea>
+        </div>
+        <button class="send-btn" id="send-btn" title="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
 
     </div>
+  </main>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="crypto.js"></script>
-<script src="app.js"></script>
+<div id="snackbar"></div>
 
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   EMOJI DATA  (iPhone / Apple emoji categories)
+═══════════════════════════════════════════════════════════════ */
+const EMOJI_CATEGORIES = [
+  { icon: '😊', label: 'Smileys', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','☺️','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { icon: '👋', label: 'People', emojis: ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦿','🦵','🦶','👂','🦻','👃','🫀','🫁','🧠','🦷','🦴','👀','👁️','👅','👄','🫦','👶','🧒','👦','👧','🧑','👱','👨','🧔','👩','🧓','👴','👵','🙍','🙎','🙅','🙆','💁','🙋','🧏','🙇','🤦','🤷'] },
+  { icon: '🐶', label: 'Animals', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐻‍❄️','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪲','🦟','🦗','🪳','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🦣','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐈‍⬛','🪶','🐓','🦃','🦤','🦚','🦜','🦢','🦩'] },
+  { icon: '🍕', label: 'Food', emojis: ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🥕','🧄','🧅','🥔','🍠','🫚','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥮','🍢','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','🍯','🧃','🥤','🧋','🍵','☕','🫖','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾'] },
+  { icon: '⚽', label: 'Activity', emojis: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🥊','🥅','⛳','🪁','🎣','🤿','🎽','🎿','🛷','🥌','🎯','🪃','🎮','🕹️','🎲','🎭','🎨','🖼️','🎪','🤹','🎪','🎬','🎤','🎧','🎼','🎵','🎶','🎸','🪕','🎹','🥁','🪘','🎷','🎺','🎻','🪗','🎙️','🎚️','🎛️','📻','🎞️','📽️','🎦','📺','📷','📸','📹','🎥'] },
+  { icon: '🌍', label: 'Travel', emojis: ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🏍️','🛵','🛺','🚲','🛴','🛹','🛼','🚏','🛣️','🛤️','⛽','🚨','🚥','🚦','🛑','🚧','⚓','⛵','🛶','🚤','🛥️','🛳️','⛴️','🚢','✈️','🛩️','🛫','🛬','🪂','💺','🚁','🚟','🚠','🚡','🛰️','🚀','🛸','🪐','🌍','🌎','🌏','🗺️','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️','🏜️','🏝️','🏞️','🏟️','🏛️','🏗️','🏘️','🏚️','🏠','🏡','🏢','🏣','🏤','🏥','🏦','🏨','🏩','🏪','🏫','🏬','🏭','🏯','🏰','🗼','🗽','⛩️','🕌','🕍','⛪'] },
+  { icon: '💡', label: 'Objects', emojis: ['⌚','📱','💻','⌨️','🖥️','🖨️','🖱️','🖲️','💽','💾','💿','📀','📷','📸','📹','🎥','☎️','📞','📟','📠','📺','📻','🧭','⏱️','⏲️','⏰','🕰️','⌛','⏳','📡','🔋','🔌','💡','🔦','🕯️','🪔','🧯','🛢️','💰','💴','💵','💶','💷','💸','💳','🧾','💎','⚖️','🦯','🔧','🔨','⚒️','🛠️','⛏️','🔩','🪛','🔫','🧨','💣','🔪','🗡️','⚔️','🛡️','🪚','🔬','🔭','📡','🩺','💊','🩹','🩼','🩻','🩺','🚪','🪞','🛁','🪠','🧴','🧷','🧹','🧺','🧻','🪣','🧼','🧽','🪤','🧲','🪜','🧰','🪝','🧲','🗑️','🛒','🚬','⚰️','🪦','⚱️','🗿','🪬','🧿','💈','⚗️','🔭','🔬'] },
+  { icon: '💜', label: 'Symbols', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☯️','🕉️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶','🈚','🈸','🈺','🈷️','✴️','🆚','💮','🉐','㊙️','㊗️','🈴','🈵','🈹','🈲','🅰️','🅱️','🆎','🆑','🅾️','🆘','❌','⭕','🛑','⛔','📛','🚫','💯','❗','❕','❓','❔','‼️','⁉️','🔅','🔆','〽️','⚠️','🚸','🔱','⚜️','🔰','♻️','✅','🈯','💹','❎','🌐','💠','Ⓜ️','🌀','💤','🏧','🚾','♿','🅿️','🛗','🈳','🈂️','🛂','🛃','🛄','🛅','🚹','🚺','🚼','🚻','🚮','🎦','📶','🈁','🔣','ℹ️','🔤','🔡','🔠','🆖','🆗','🆙','🆒','🆕','🆓','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','🔢','#️⃣','*️⃣','▶️','⏸️','⏹️','⏺️','⏭️','⏮️','⏩','⏪','⏫','⏬','◀️','🔼','🔽','➡️','⬅️','⬆️','⬇️','↗️','↘️','↙️','↖️','↕️','↔️','↪️','↩️','⤴️','⤵️','🔀','🔁','🔂','🔄','🔃','🎵','🎶','➕','➖','➗','✖️','💲','💱','™️','©️','®️','〰️','🔚','🔙','🔛','🔝','🔜','✔️','☑️','🔘','🔴','🟠','🟡','🟢','🔵','🟣','⚫','⚪','🟤','🔺','🔻','🔷','🔶','🔹','🔸','🔲','🔳','▪️','▫️','◾','◽','◼️','◻️','🟥','🟧','🟨','🟩','🟦','🟪','⬛','⬜','🟫','🔈','🔇','🔉','🔊','📢','📣','📯','🔔','🔕','🎵','🎶','💹','🗣️','💬','💭','🗯️','♠️','♣️','♥️','♦️','🃏','🀄','🎴'] }
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   CRYPTO HELPERS  (AES-GCM via Web Crypto API)
+═══════════════════════════════════════════════════════════════ */
+const CIPHER_PASSWORD = "cipherchat-v3-shared-secret-2025"; // replace with ECDH for real prod
+
+async function getKey() {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", enc.encode(CIPHER_PASSWORD), "PBKDF2", false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: enc.encode("cipherchat-salt"), iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function encrypt(plaintext) {
+  const key = await getKey();
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plaintext));
+  const combined = new Uint8Array(iv.byteLength + cipherBuf.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(cipherBuf), iv.byteLength);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decrypt(b64) {
+  try {
+    const key  = await getKey();
+    const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const iv   = data.slice(0, 12);
+    const cipher = data.slice(12);
+    const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+    return new TextDecoder().decode(plainBuf);
+  } catch { return "[encrypted]"; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   APP STATE
+═══════════════════════════════════════════════════════════════ */
+let myUsername  = null;
+let activeChat  = null;
+let socket      = null;
+let typingTimer = null;
+let recentEmoji = JSON.parse(localStorage.getItem("cc_recent_emoji") || "[]");
+
+// Message store: msgId → { el, timer }
+const msgStore = {};
+
+/* ═══════════════════════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════════════════════ */
+function snack(msg, dur = 2500) {
+  const el = document.getElementById("snackbar");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), dur);
+}
+
+function uuid() {
+  return crypto.randomUUID ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════════════════════════ */
+// Tab switching
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const tab = btn.dataset.tab;
+    document.getElementById("login-form").style.display  = tab === "login"  ? "" : "none";
+    document.getElementById("signup-form").style.display = tab === "signup" ? "" : "none";
+    document.getElementById("login-error").style.display  = "none";
+    document.getElementById("signup-error").style.display = "none";
+  });
+});
+
+async function doAuth(endpoint, body, errEl, btnEl) {
+  errEl.style.display = "none";
+  btnEl.classList.add("loading");
+  btnEl.disabled = true;
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    btnEl.classList.remove("loading");
+    btnEl.disabled = false;
+    return d;
+  } catch {
+    btnEl.classList.remove("loading");
+    btnEl.disabled = false;
+    return { success: false, message: "Network error" };
+  }
+}
+
+document.getElementById("login-btn").addEventListener("click", async () => {
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  const errEl    = document.getElementById("login-error");
+  if (!username || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = ""; return; }
+
+  const d = await doAuth("/login", { username, password }, errEl, document.getElementById("login-btn"));
+  if (d.success) {
+    myUsername = d.username || username;
+    initChat();
+  } else {
+    errEl.textContent = d.message;
+    errEl.style.display = "";
+  }
+});
+
+document.getElementById("signup-btn").addEventListener("click", async () => {
+  const username = document.getElementById("signup-username").value.trim();
+  const email    = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value;
+  const errEl    = document.getElementById("signup-error");
+  if (!username || !email || !password) { errEl.textContent = "Fill in all fields"; errEl.style.display = ""; return; }
+  if (password.length < 8) { errEl.textContent = "Password must be 8+ characters"; errEl.style.display = ""; return; }
+
+  const d = await doAuth("/signup", { username, email, password }, errEl, document.getElementById("signup-btn"));
+  if (d.success) {
+    snack("✅ Account created! Sign in now.");
+    document.querySelector('[data-tab="login"]').click();
+    document.getElementById("login-username").value = username;
+  } else {
+    errEl.textContent = d.message;
+    errEl.style.display = "";
+  }
+});
+
+// Enter key on auth
+["login-username","login-password"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("login-btn").click(); });
+});
+["signup-username","signup-email","signup-password"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("signup-btn").click(); });
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT CHAT
+═══════════════════════════════════════════════════════════════ */
+function initChat() {
+  document.getElementById("auth-screen").style.display = "none";
+  const cs = document.getElementById("chat-screen");
+  cs.style.display = "flex";
+  document.getElementById("me-label").textContent = myUsername;
+
+  socket = io();
+
+  socket.on("connect", () => {
+    socket.emit("join", myUsername);
+  });
+
+  socket.on("presence", updatePresence);
+
+  socket.on("receive-message", async (payload) => {
+    // Only show messages from the currently active chat or queue them
+    const plain = await decrypt(payload.message);
+    appendMessage({
+      text:    plain,
+      mine:    false,
+      msgId:   payload.msgId,
+      sentAt:  payload.sentAt,
+      timer:   payload.timer || 60000,
+      from:    payload.from,
+      isReply: payload.isReply
+    });
+
+    // If it's a reply to one of my messages, vanish the original
+    if (payload.isReply && payload.replyToId) {
+      vanishMessage(payload.replyToId);
+    }
+  });
+
+  socket.on("vanish-message", ({ msgId }) => {
+    vanishMessage(msgId);
+  });
+
+  socket.on("typing", ({ from, isTyping }) => {
+    if (from === activeChat) {
+      const ti = document.getElementById("typing-indicator");
+      ti.classList.toggle("visible", isTyping);
+    }
+  });
+
+  socket.on("message-delivered", ({ msgId }) => {
+    // Could add checkmark here
+  });
+
+  document.getElementById("logout-btn").addEventListener("click", logout);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRESENCE / USERS LIST
+═══════════════════════════════════════════════════════════════ */
+function updatePresence(users) {
+  const list = document.getElementById("users-list");
+  list.innerHTML = "";
+
+  const others = users.filter(u => u !== myUsername);
+  if (!others.length) {
+    list.innerHTML = `<div style="padding:12px 16px;font-size:13px;color:var(--text-muted)">No one online yet</div>`;
+    return;
+  }
+
+  others.forEach(u => {
+    const item = document.createElement("div");
+    item.className = "user-item" + (u === activeChat ? " active" : "");
+    item.innerHTML = `
+      <div class="user-avatar">
+        ${u[0].toUpperCase()}
+        <div class="status-dot"></div>
+      </div>
+      <div class="user-info">
+        <div class="user-name">${u}</div>
+        <div class="user-status">● online</div>
+      </div>
+    `;
+    item.addEventListener("click", () => openChat(u));
+    list.appendChild(item);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OPEN CHAT
+═══════════════════════════════════════════════════════════════ */
+function openChat(username) {
+  activeChat = username;
+
+  // Update sidebar
+  document.querySelectorAll(".user-item").forEach(el => {
+    el.classList.toggle("active", el.querySelector(".user-name")?.textContent === username);
+  });
+
+  // Show header
+  document.getElementById("no-chat").style.display = "none";
+  const ac = document.getElementById("active-chat");
+  ac.style.display = "flex";
+
+  const initial = username[0].toUpperCase();
+  document.getElementById("h-avatar").textContent = initial;
+  document.getElementById("h-name").textContent   = username;
+  document.getElementById("h-sub").textContent    = "🔒 messages vanish after reading & self-destruct in 60s";
+
+  // Clear messages
+  const area = document.getElementById("messages-area");
+  area.innerHTML = `
+    <div class="sys-msg">🔒 E2E encrypted · messages self-destruct in 60s · vanish on reply</div>
+    <div class="typing-indicator" id="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  `;
+
+  document.getElementById("msg-input").focus();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MESSAGING
+═══════════════════════════════════════════════════════════════ */
+async function sendMessage() {
+  const input = document.getElementById("msg-input");
+  const text  = input.value.trim();
+  if (!text || !activeChat) return;
+
+  input.value = "";
+  input.style.height = "";
+
+  const msgId     = uuid();
+  const encrypted = await encrypt(text);
+  const sentAt    = Date.now();
+  const timer     = 60000; // 60 seconds
+
+  // Optimistic local append
+  appendMessage({ text, mine: true, msgId, sentAt, timer });
+
+  // Emit
+  socket.emit("send-message", {
+    to:      activeChat,
+    message: encrypted,
+    msgId,
+    timer,
+    isReply: false
+  });
+}
+
+function appendMessage({ text, mine, msgId, sentAt, timer = 60000, from, isReply }) {
+  const area = document.getElementById("messages-area");
+  const ti   = document.getElementById("typing-indicator");
+
+  const wrap = document.createElement("div");
+  wrap.className = `msg-wrap ${mine ? "mine" : "theirs"}`;
+  wrap.dataset.msgId = msgId;
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble";
+  bubble.textContent = text;
+
+  const meta = document.createElement("div");
+  meta.className = "msg-meta";
+
+  const timeEl = document.createElement("span");
+  timeEl.className = "msg-time";
+  timeEl.textContent = fmtTime(sentAt || Date.now());
+  meta.appendChild(timeEl);
+
+  if (!mine) {
+    // Reply button
+    const replyBtn = document.createElement("button");
+    replyBtn.textContent = "↩ Reply";
+    replyBtn.style.cssText = `
+      background:none;border:1px solid var(--border);border-radius:20px;
+      color:var(--text-dim);font-size:11px;padding:2px 8px;cursor:pointer;
+      font-family:var(--font);transition:all .15s;
+    `;
+    replyBtn.addEventListener("mouseenter", () => {
+      replyBtn.style.borderColor = "var(--accent)";
+      replyBtn.style.color = "var(--accent2)";
+    });
+    replyBtn.addEventListener("mouseleave", () => {
+      replyBtn.style.borderColor = "var(--border)";
+      replyBtn.style.color = "var(--text-dim)";
+    });
+    replyBtn.addEventListener("click", async () => {
+      // Trigger reply-mode: pre-fill input
+      const input = document.getElementById("msg-input");
+      input.placeholder = `Replying… (your message will make this vanish)`;
+      input.dataset.replyTo = msgId;
+      input.focus();
+    });
+    meta.appendChild(replyBtn);
+  }
+
+  // Self-destruct bar
+  const bar = document.createElement("div");
+  bar.className = "destruct-bar";
+  const fill = document.createElement("div");
+  fill.className = "destruct-bar-fill";
+  fill.style.width = "100%";
+  bar.appendChild(fill);
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(meta);
+  wrap.appendChild(bar);
+
+  // Insert before typing indicator
+  area.insertBefore(wrap, ti);
+  area.scrollTop = area.scrollHeight;
+
+  // Start self-destruct countdown
+  const totalMs   = timer;
+  const startTime = Date.now();
+  const countdown = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const pct = Math.max(0, 100 - (elapsed / totalMs * 100));
+    fill.style.width = pct + "%";
+    if (pct <= 0) {
+      clearInterval(countdown);
+      vanishMessage(msgId);
+      if (!mine && socket) {
+        socket.emit("self-destruct", { to: from || activeChat, msgId });
+      }
+    }
+  }, 1000);
+
+  msgStore[msgId] = { el: wrap, countdown, replyToId: null };
+}
+
+function vanishMessage(msgId) {
+  const stored = msgStore[msgId];
+  if (!stored) {
+    // Try by DOM
+    const el = document.querySelector(`[data-msg-id="${msgId}"]`);
+    if (el) { el.classList.add("vanishing"); setTimeout(() => el.remove(), 500); }
+    return;
+  }
+  clearInterval(stored.countdown);
+  stored.el.classList.add("vanishing");
+  setTimeout(() => stored.el.remove(), 500);
+  delete msgStore[msgId];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEND BUTTON & INPUT
+═══════════════════════════════════════════════════════════════ */
+document.getElementById("send-btn").addEventListener("click", sendMessage);
+
+document.getElementById("msg-input").addEventListener("keydown", async e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    const input = document.getElementById("msg-input");
+    const replyTo = input.dataset.replyTo;
+
+    if (replyTo) {
+      // Send as reply → triggers vanish of original
+      const text = input.value.trim();
+      if (!text || !activeChat) return;
+      input.value = "";
+      input.placeholder = "Type a message…";
+      delete input.dataset.replyTo;
+
+      const msgId     = uuid();
+      const encrypted = await encrypt(text);
+      appendMessage({ text, mine: true, msgId, sentAt: Date.now(), timer: 60000, isReply: true });
+
+      socket.emit("send-message", {
+        to: activeChat,
+        message: encrypted,
+        msgId,
+        timer: 60000,
+        isReply: true,
+        replyToId: replyTo
+      });
+      vanishMessage(replyTo);
+    } else {
+      sendMessage();
+    }
+  }
+});
+
+// Auto-grow textarea
+document.getElementById("msg-input").addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+
+  // Typing indicator
+  if (!activeChat) return;
+  socket.emit("typing", { to: activeChat, isTyping: true });
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    socket.emit("typing", { to: activeChat, isTyping: false });
+  }, 1500);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   EMOJI PICKER
+═══════════════════════════════════════════════════════════════ */
+function buildEmojiPicker() {
+  const cats   = document.getElementById("emoji-cats");
+  const grid   = document.getElementById("emoji-grid");
+  const search = document.getElementById("emoji-search-input");
+
+  // Build category buttons
+  EMOJI_CATEGORIES.forEach((cat, i) => {
+    const btn = document.createElement("button");
+    btn.className = "cat-btn" + (i === 0 ? " active" : "");
+    btn.textContent = cat.icon;
+    btn.title = cat.label;
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      search.value = "";
+      renderGrid(cat.emojis);
+    });
+    cats.appendChild(btn);
+  });
+
+  // Initial grid
+  renderGrid(EMOJI_CATEGORIES[0].emojis);
+
+  // Search
+  search.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    if (!q) { renderGrid(EMOJI_CATEGORIES[0].emojis); return; }
+    const all = EMOJI_CATEGORIES.flatMap(c => c.emojis);
+    // Simple filter — emoji description not available so show all and let user browse
+    // For real search you'd need an emoji-name map; here we show all 
+    renderGrid(all.slice(0, 64));
+  });
+}
+
+function renderGrid(emojis) {
+  const grid = document.getElementById("emoji-grid");
+  grid.innerHTML = "";
+  emojis.forEach(em => {
+    const btn = document.createElement("button");
+    btn.className = "e-btn";
+    btn.textContent = em;
+    btn.addEventListener("click", () => insertEmoji(em));
+    grid.appendChild(btn);
+  });
+}
+
+function renderRecents() {
+  const section = document.getElementById("emoji-recents-section");
+  const row     = document.getElementById("emoji-recents-row");
+  if (!recentEmoji.length) { section.style.display = "none"; return; }
+  section.style.display = "";
+  row.innerHTML = "";
+  recentEmoji.slice(0, 16).forEach(em => {
+    const btn = document.createElement("button");
+    btn.className = "e-btn";
+    btn.textContent = em;
+    btn.addEventListener("click", () => insertEmoji(em));
+    row.appendChild(btn);
+  });
+}
+
+function insertEmoji(em) {
+  const input = document.getElementById("msg-input");
+  const pos   = input.selectionStart;
+  const val   = input.value;
+  input.value = val.slice(0, pos) + em + val.slice(pos);
+  input.selectionStart = input.selectionEnd = pos + em.length;
+  input.focus();
+
+  // Track recent
+  recentEmoji = [em, ...recentEmoji.filter(e => e !== em)].slice(0, 24);
+  localStorage.setItem("cc_recent_emoji", JSON.stringify(recentEmoji));
+  renderRecents();
+}
+
+// Toggle picker
+const emojiTrigger = document.getElementById("emoji-trigger");
+const emojiPicker  = document.getElementById("emoji-picker");
+emojiTrigger.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isOpen = emojiPicker.classList.toggle("open");
+  if (isOpen) { renderRecents(); }
+});
+
+// Close on outside click
+document.addEventListener("click", (e) => {
+  if (!emojiPicker.contains(e.target) && e.target !== emojiTrigger) {
+    emojiPicker.classList.remove("open");
+  }
+});
+
+buildEmojiPicker();
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGOUT
+═══════════════════════════════════════════════════════════════ */
+function logout() {
+  if (socket) socket.disconnect();
+  myUsername = null;
+  activeChat = null;
+  document.getElementById("chat-screen").style.display = "none";
+  document.getElementById("auth-screen").style.display = "flex";
+  document.getElementById("login-username").value = "";
+  document.getElementById("login-password").value = "";
+  document.getElementById("login-error").style.display = "none";
+}
+</script>
 </body>
 </html>
