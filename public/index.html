@@ -541,18 +541,128 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   transition: width 1s linear;
 }
 
-/* Vanish animation */
+/* Vanish + smoke animation */
 @keyframes vanish {
-  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
-  50%  { opacity: 0.5; transform: scale(0.95); filter: blur(2px); }
-  100% { opacity: 0; transform: scale(0.9); filter: blur(8px); height: 0; margin: 0; padding: 0; }
+  0%   { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+  40%  { opacity: 0.6; transform: scale(0.97) translateY(-2px); filter: blur(1px); }
+  100% { opacity: 0; transform: scale(0.88) translateY(-8px); filter: blur(6px); }
 }
 
 .msg-wrap.vanishing {
-  animation: vanish .5s ease-out forwards;
+  animation: vanish .6s ease-out forwards;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
 }
+
+/* Smoke particles canvas overlay */
+#smoke-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Encrypted bubble style */
+.msg-bubble.encrypted {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: rgba(124,77,255,0.7);
+  background: rgba(124,77,255,0.06) !important;
+  border: 1px solid rgba(124,77,255,0.2) !important;
+  word-break: break-all;
+  cursor: default;
+  position: relative;
+}
+
+.msg-wrap.mine .msg-bubble.encrypted {
+  background: rgba(124,77,255,0.1) !important;
+  box-shadow: none !important;
+}
+
+.decrypt-hint {
+  font-size: 10px;
+  color: var(--accent2);
+  margin-top: 4px;
+  font-family: var(--mono);
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Passcode banner — shown at top of chat when no passcode set */
+.passcode-banner {
+  background: linear-gradient(135deg, rgba(124,77,255,0.12), rgba(0,229,160,0.06));
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.passcode-banner input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  letter-spacing: 1px;
+}
+.passcode-banner input:focus { border-color: var(--accent); }
+.passcode-banner input::placeholder { color: var(--text-muted); letter-spacing: 0; font-family: var(--font); }
+
+.passcode-set-btn {
+  background: linear-gradient(135deg, var(--accent), #5c35cc);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-family: var(--font);
+  white-space: nowrap;
+  transition: opacity .2s;
+}
+.passcode-set-btn:hover { opacity: 0.85; }
+
+.passcode-lock-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.passcode-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: var(--green-dim);
+  border-bottom: 1px solid rgba(0,229,160,0.15);
+  font-size: 12px;
+  color: var(--green);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.passcode-change-btn {
+  background: none;
+  border: 1px solid rgba(0,229,160,0.3);
+  border-radius: 6px;
+  color: var(--green);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: auto;
+  font-family: var(--font);
+  transition: background .15s;
+}
+.passcode-change-btn:hover { background: rgba(0,229,160,0.1); }
 
 /* Typing indicator */
 .typing-indicator {
@@ -904,6 +1014,20 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         <div class="header-badge">🔒 E2E</div>
       </div>
 
+      <!-- Passcode banner (shown when no passcode set) -->
+      <div class="passcode-banner" id="passcode-banner">
+        <span class="passcode-lock-icon">🔑</span>
+        <input type="password" id="passcode-input" placeholder="Enter session passcode to decrypt messages" maxlength="32"/>
+        <button class="passcode-set-btn" id="passcode-set-btn">Unlock</button>
+      </div>
+
+      <!-- Passcode active status (shown when passcode is set) -->
+      <div class="passcode-status" id="passcode-status" style="display:none">
+        <span>🟢</span>
+        <span>Session unlocked — messages decrypting</span>
+        <button class="passcode-change-btn" id="passcode-clear-btn">Change</button>
+      </div>
+
       <div class="messages-area" id="messages-area">
         <div class="sys-msg">Messages are encrypted and self-destruct after 60 seconds 🔥</div>
         <div class="typing-indicator" id="typing-indicator">
@@ -945,6 +1069,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 </div>
 
 <div id="snackbar"></div>
+<canvas id="smoke-canvas"></canvas>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -963,17 +1088,19 @@ const EMOJI_CATEGORIES = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
-   CRYPTO HELPERS  (AES-GCM via Web Crypto API)
+   CRYPTO HELPERS
+   Layer 1 (transport): AES-GCM with server shared secret — always on
+   Layer 2 (session):   AES-GCM with user passcode — decrypts display
 ═══════════════════════════════════════════════════════════════ */
-const CIPHER_PASSWORD = "cipherchat-v3-shared-secret-2025"; // replace with ECDH for real prod
+const TRANSPORT_SECRET = "cipherchat-v3-transport-2025";
 
-async function getKey() {
+async function deriveKey(password, salt) {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
-    "raw", enc.encode(CIPHER_PASSWORD), "PBKDF2", false, ["deriveKey"]
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]
   );
   return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: enc.encode("cipherchat-salt"), iterations: 100000, hash: "SHA-256" },
+    { name: "PBKDF2", salt: enc.encode(salt), iterations: 100000, hash: "SHA-256" },
     keyMaterial,
     { name: "AES-GCM", length: 256 },
     false,
@@ -981,8 +1108,8 @@ async function getKey() {
   );
 }
 
-async function encrypt(plaintext) {
-  const key = await getKey();
+async function aesEncrypt(plaintext, password, salt) {
+  const key = await deriveKey(password, salt);
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
   const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(plaintext));
@@ -992,28 +1119,118 @@ async function encrypt(plaintext) {
   return btoa(String.fromCharCode(...combined));
 }
 
-async function decrypt(b64) {
-  try {
-    const key  = await getKey();
-    const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const iv   = data.slice(0, 12);
-    const cipher = data.slice(12);
-    const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
-    return new TextDecoder().decode(plainBuf);
-  } catch { return "[encrypted]"; }
+async function aesDecrypt(b64, password, salt) {
+  const key  = await deriveKey(password, salt);
+  const data = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const iv   = data.slice(0, 12);
+  const cipher = data.slice(12);
+  const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+  return new TextDecoder().decode(plainBuf);
+}
+
+// Encrypt for transport (always)
+async function encrypt(plaintext) {
+  return aesEncrypt(plaintext, TRANSPORT_SECRET, "cc-transport-salt");
+}
+
+// Decrypt transport layer
+async function decryptTransport(b64) {
+  try { return await aesDecrypt(b64, TRANSPORT_SECRET, "cc-transport-salt"); }
+  catch { return null; }
+}
+
+// Try to decrypt with session passcode
+async function decryptSession(b64, passcode) {
+  try { return await aesDecrypt(b64, passcode, "cc-session-salt"); }
+  catch { return null; }
+}
+
+// Encrypt with BOTH layers: session passcode wraps the plaintext, then transport wraps that
+async function encryptFull(plaintext, passcode) {
+  let inner = plaintext;
+  if (passcode) {
+    inner = await aesEncrypt(plaintext, passcode, "cc-session-salt");
+    inner = "§ENC§" + inner; // marker so receiver knows it's double-encrypted
+  }
+  return aesEncrypt(inner, TRANSPORT_SECRET, "cc-transport-salt");
+}
+
+// Produce a deterministic-looking cipher display string from b64
+function toCipherDisplay(b64) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  // Take first 48 chars of b64 and format in groups
+  const raw = b64.replace(/[^A-Za-z0-9+/=]/g, "").slice(0, 60);
+  return raw.match(/.{1,8}/g)?.join(" ") || raw;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    APP STATE
 ═══════════════════════════════════════════════════════════════ */
-let myUsername  = null;
-let activeChat  = null;
-let socket      = null;
-let typingTimer = null;
-let recentEmoji = JSON.parse(localStorage.getItem("cc_recent_emoji") || "[]");
+let myUsername    = null;
+let activeChat    = null;
+let socket        = null;
+let typingTimer   = null;
+let sessionPasscode = null; // set by user per chat session
+let recentEmoji   = JSON.parse(localStorage.getItem("cc_recent_emoji") || "[]");
 
-// Message store: msgId → { el, timer }
+// Message store: msgId → { el, countdown, rawB64 (for retry decrypt) }
 const msgStore = {};
+
+/* ═══════════════════════════════════════════════════════════════
+   SMOKE ENGINE
+═══════════════════════════════════════════════════════════════ */
+const smokeCanvas = document.getElementById("smoke-canvas");
+const smokeCtx    = smokeCanvas.getContext("2d");
+smokeCanvas.width  = window.innerWidth;
+smokeCanvas.height = window.innerHeight;
+window.addEventListener("resize", () => {
+  smokeCanvas.width  = window.innerWidth;
+  smokeCanvas.height = window.innerHeight;
+});
+
+const smokeParticles = [];
+
+function spawnSmoke(x, y, width) {
+  const count = Math.floor(width / 6) + 18;
+  for (let i = 0; i < count; i++) {
+    smokeParticles.push({
+      x: x + Math.random() * width,
+      y: y + Math.random() * 30,
+      vx: (Math.random() - 0.5) * 1.8,
+      vy: -(Math.random() * 1.4 + 0.4),
+      r:  Math.random() * 18 + 8,
+      alpha: Math.random() * 0.55 + 0.2,
+      decay: Math.random() * 0.012 + 0.008,
+      hue: Math.random() > 0.5 ? "124,77,255" : "180,100,255"
+    });
+  }
+  if (!smokeAnimating) animateSmoke();
+}
+
+let smokeAnimating = false;
+function animateSmoke() {
+  smokeAnimating = true;
+  smokeCtx.clearRect(0, 0, smokeCanvas.width, smokeCanvas.height);
+  for (let i = smokeParticles.length - 1; i >= 0; i--) {
+    const p = smokeParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy *= 0.98;
+    p.vx *= 0.97;
+    p.alpha -= p.decay;
+    p.r += 0.3;
+    if (p.alpha <= 0) { smokeParticles.splice(i, 1); continue; }
+    const grad = smokeCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+    grad.addColorStop(0, `rgba(${p.hue},${p.alpha})`);
+    grad.addColorStop(1, `rgba(${p.hue},0)`);
+    smokeCtx.beginPath();
+    smokeCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    smokeCtx.fillStyle = grad;
+    smokeCtx.fill();
+  }
+  if (smokeParticles.length > 0) requestAnimationFrame(animateSmoke);
+  else { smokeAnimating = false; smokeCtx.clearRect(0, 0, smokeCanvas.width, smokeCanvas.height); }
+}
 
 /* ═══════════════════════════════════════════════════════════════
    UTILS
@@ -1207,13 +1424,13 @@ function updatePresence(users) {
 ═══════════════════════════════════════════════════════════════ */
 function openChat(username) {
   activeChat = username;
+  sessionPasscode = null; // reset passcode for new chat
 
   // Update sidebar
   document.querySelectorAll(".user-item").forEach(el => {
     el.classList.toggle("active", el.querySelector(".user-name")?.textContent === username);
   });
 
-  // Show header
   document.getElementById("no-chat").style.display = "none";
   const ac = document.getElementById("active-chat");
   ac.style.display = "flex";
@@ -1221,12 +1438,17 @@ function openChat(username) {
   const initial = username[0].toUpperCase();
   document.getElementById("h-avatar").textContent = initial;
   document.getElementById("h-name").textContent   = username;
-  document.getElementById("h-sub").textContent    = "🔒 messages vanish after reading & self-destruct in 60s";
+  document.getElementById("h-sub").textContent    = "🔒 messages appear encrypted until passcode entered";
+
+  // Show passcode banner, hide status
+  document.getElementById("passcode-banner").style.display = "flex";
+  document.getElementById("passcode-status").style.display = "none";
+  document.getElementById("passcode-input").value = "";
 
   // Clear messages
   const area = document.getElementById("messages-area");
   area.innerHTML = `
-    <div class="sys-msg">🔒 E2E encrypted · messages self-destruct in 60s · vanish on reply</div>
+    <div class="sys-msg">🔒 Messages appear as ciphertext — enter session passcode above to decrypt</div>
     <div class="typing-indicator" id="typing-indicator">
       <div class="typing-dot"></div>
       <div class="typing-dot"></div>
@@ -1234,7 +1456,82 @@ function openChat(username) {
     </div>
   `;
 
+  document.getElementById("passcode-input").focus();
+}
+
+// Passcode unlock
+document.getElementById("passcode-set-btn").addEventListener("click", applyPasscode);
+document.getElementById("passcode-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") applyPasscode();
+});
+
+function applyPasscode() {
+  const val = document.getElementById("passcode-input").value.trim();
+  if (!val) { snack("⚠️ Enter a passcode first"); return; }
+  sessionPasscode = val;
+  document.getElementById("passcode-banner").style.display = "none";
+  document.getElementById("passcode-status").style.display = "flex";
+  snack("🔓 Session unlocked");
+  // Retry decrypting any already-received messages
+  retryDecryptAll();
   document.getElementById("msg-input").focus();
+}
+
+document.getElementById("passcode-clear-btn").addEventListener("click", () => {
+  sessionPasscode = null;
+  document.getElementById("passcode-banner").style.display = "flex";
+  document.getElementById("passcode-status").style.display = "none";
+  document.getElementById("passcode-input").value = "";
+  document.getElementById("passcode-input").focus();
+  // Re-encrypt display of all visible messages
+  reEncryptDisplay();
+  snack("🔒 Session locked");
+});
+
+async function retryDecryptAll() {
+  for (const [msgId, stored] of Object.entries(msgStore)) {
+    if (stored.rawB64 && stored.el) {
+      const bubble = stored.el.querySelector(".msg-bubble");
+      if (bubble && bubble.classList.contains("encrypted")) {
+        const plain = await tryDecryptDisplay(stored.rawB64);
+        if (plain) {
+          bubble.textContent = plain;
+          bubble.classList.remove("encrypted");
+          const hint = stored.el.querySelector(".decrypt-hint");
+          if (hint) hint.remove();
+        }
+      }
+    }
+  }
+}
+
+function reEncryptDisplay() {
+  for (const [msgId, stored] of Object.entries(msgStore)) {
+    if (stored.rawB64 && stored.el) {
+      const bubble = stored.el.querySelector(".msg-bubble");
+      if (bubble && !bubble.classList.contains("encrypted")) {
+        bubble.textContent = toCipherDisplay(stored.rawB64);
+        bubble.classList.add("encrypted");
+        if (!stored.el.querySelector(".decrypt-hint")) {
+          const hint = document.createElement("div");
+          hint.className = "decrypt-hint";
+          hint.textContent = "🔐 enter passcode to read";
+          stored.el.querySelector(".msg-meta")?.before(hint);
+        }
+      }
+    }
+  }
+}
+
+async function tryDecryptDisplay(rawB64) {
+  if (!sessionPasscode) return null;
+  // rawB64 is the transport-decrypted inner payload
+  // It may start with §ENC§ if double-encrypted with session passcode
+  if (rawB64.startsWith("§ENC§")) {
+    return await decryptSession(rawB64.slice(5), sessionPasscode);
+  }
+  // Plain message (sender had no passcode) — show as-is if passcode matches "none"
+  return rawB64; // no session encryption, show plaintext directly
 }
 
 /* ═══════════════════════════════════════════════════════════════
