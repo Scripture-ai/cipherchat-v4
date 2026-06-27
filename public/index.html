@@ -946,6 +946,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 <div id="snackbar"></div>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
 /* ═══════════════════════════════════════════════════════════════
    EMOJI DATA  (iPhone / Apple emoji categories)
 ═══════════════════════════════════════════════════════════════ */
@@ -1050,6 +1051,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 
 async function doAuth(endpoint, body, errEl, btnEl) {
   errEl.style.display = "none";
+  errEl.textContent = "";
   btnEl.classList.add("loading");
   btnEl.disabled = true;
   try {
@@ -1058,14 +1060,16 @@ async function doAuth(endpoint, body, errEl, btnEl) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
-    const d = await r.json();
+    let d;
+    try { d = await r.json(); }
+    catch { d = { success: false, message: "Server returned invalid response (status " + r.status + ")" }; }
     btnEl.classList.remove("loading");
     btnEl.disabled = false;
     return d;
-  } catch {
+  } catch (err) {
     btnEl.classList.remove("loading");
     btnEl.disabled = false;
-    return { success: false, message: "Network error" };
+    return { success: false, message: "Network error: " + (err.message || "could not reach server") };
   }
 }
 
@@ -1518,6 +1522,8 @@ function logout() {
   document.getElementById("login-password").value = "";
   document.getElementById("login-error").style.display = "none";
 }
+
+}); // end DOMContentLoaded
 </script>
 </body>
 </html>
