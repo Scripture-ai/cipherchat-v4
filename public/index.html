@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CipherChat v4</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- AUTH BOX -->
+    <div id="auth-box">
+
+        <h1>CipherChat</h1>
+        <p>Secure End-to-End Messaging</p>
+
+        <input
+            id="username"
+            type="text"
+            placeholder="Enter username"
+        >
+
+        <input
+            id="password"
+            type="password"
+            placeholder="Enter account password"
+        >
+
+        <input
+            id="passkey"
+            type="password"
+            placeholder="Enter shared chat passkey"
+        >
+
+        <div class="buttons">
+            <button onclick="signup()">Sign Up</button>
+            <button onclick="login()">Login</button>
+        </div>
+
+    </div>
+
+    <!-- CHAT BOX -->
+    <div id="chat-box" style="display:none;">
+
+        <div class="topbar">
+            <div>
+                <h2>Welcome <span id="current-user"></span></h2>
+                <p id="online-users">Connecting...</p>
+            </div>
+
+            <button onclick="logout()">Logout</button>
+        </div>
+
+        <input
+            id="receiver"
+            type="text"
+            placeholder="Receiver username"
+        >
+
+        <div id="messages"></div>
+
+        <textarea
+            id="message"
+            placeholder="Type secure message..."
+        ></textarea>
+
+        <button onclick="sendMessage()">Send</button>
+
+    </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="crypto.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
