@@ -3,73 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CipherChat v4</title>
+    <title>CipherChat</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="container">
+<div class="background"></div>
 
-    <!-- AUTH BOX -->
-    <div id="auth-box">
-
-        <h1>CipherChat</h1>
+<div class="login-screen" id="loginScreen">
+    <div class="glass-card">
+        <h1>CIPHERCHAT</h1>
         <p>Secure End-to-End Messaging</p>
 
-        <input
-            id="username"
-            type="text"
-            placeholder="Enter username"
-        >
+        <input id="username" placeholder="Username">
+        <input id="email" placeholder="Email (signup only)">
+        <input id="password" type="password" placeholder="Password">
 
-        <input
-            id="password"
-            type="password"
-            placeholder="Enter account password"
-        >
-
-        <input
-            id="passkey"
-            type="password"
-            placeholder="Enter shared chat passkey"
-        >
-
-        <div class="buttons">
-            <button onclick="signup()">Sign Up</button>
-            <button onclick="login()">Login</button>
-        </div>
-
+        <button onclick="signup()">Sign Up</button>
+        <button onclick="login()">Login</button>
     </div>
+</div>
 
-    <!-- CHAT BOX -->
-    <div id="chat-box" style="display:none;">
+<div class="chat-screen hidden" id="chatScreen">
+    <div class="chat-wrapper">
 
         <div class="topbar">
             <div>
-                <h2>Welcome <span id="current-user"></span></h2>
-                <p id="online-users">Connecting...</p>
+                <h2>CipherChat Secure Link</h2>
+                <p id="presence">Connecting...</p>
             </div>
 
-            <button onclick="logout()">Logout</button>
+            <div>
+                <button onclick="setPasskey()">Passkey</button>
+                <button onclick="logout()">Logout</button>
+                <button class="panic-btn" onclick="panic()">PANIC</button>
+            </div>
         </div>
 
-        <input
-            id="receiver"
-            type="text"
-            placeholder="Receiver username"
-        >
+        <div id="messages" class="messages"></div>
 
-        <div id="messages"></div>
-
-        <textarea
-            id="message"
-            placeholder="Type secure message..."
-        ></textarea>
-
-        <button onclick="sendMessage()">Send</button>
+        <div class="chat-controls">
+            <input id="recipient" placeholder="Send to username">
+            <input id="timer" type="number" placeholder="Destruct (sec)">
+            <textarea id="message" placeholder="Transmit secure message..."></textarea>
+            <button onclick="send()">SEND</button>
+        </div>
 
     </div>
-
 </div>
 
 <script src="/socket.io/socket.io.js"></script>

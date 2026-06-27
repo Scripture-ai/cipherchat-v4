@@ -1,177 +1,138 @@
 const socket = io();
 
-let currentUser = "";
-let currentPasskey = "";
+let username = "";
+let passkey = "";
 
-/* SIGN UP */
-async function signup() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
+function signup() {
+    const user = document.getElementById("username").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
 
-    if (!username || !password) {
-        alert("Username and password required");
-        return;
-    }
-
-    const res = await fetch("/signup", {
+    fetch("/signup", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-    alert(data.message);
-}
-
-/* LOGIN */
-async function login() {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
-    const passkey = document.getElementById("passkey").value.trim();
-
-    if (!username || !password || !passkey) {
-        alert("Username, password and passkey required");
-        return;
-    }
-
-    const res = await fetch("/login", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-
-    if (data.message === "Login successful") {
-        currentUser = username;
-
-        // Important: set passkey before loading history
-        currentPasskey = passkey;
-
-        // Switch UI
-        document.getElementById("auth-box").style.display = "none";
-        document.getElementById("chat-box").style.display = "block";
-
-        // Show username
-        document.getElementById("current-user").innerText = username;
-
-        // Join socket
-        socket.emit("join", username);
-
-        // Load old messages after passkey is ready
-        socket.emit("load-history", username);
-
-    } else {
+        body: JSON.stringify({
+            username: user,
+            email,
+            password
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
         alert(data.message);
+    });
+}
+
+function login() {
+    const user = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+
+    fetch("/login", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: user,
+            password
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            username = user;
+
+            localStorage.setItem("cipherUser", username);
+
+            document.getElementById("loginScreen").classList.add("hidden");
+            document.getElementById("chatScreen").classList.remove("hidden");
+
+            setPasskey();
+
+            socket.emit("join", username);
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function setPasskey() {
+    const key = prompt("Enter secure channel passkey:");
+
+    if (!key) {
+        alert("Passkey required");
+        return;
     }
+
+    passkey = key;
 }
 
-/* LOGOUT */
-function logout() {
-    currentUser = "";
-    currentPasskey = "";
+function send() {
+    const recipient = document.getElementById("recipient").value;
+    const messageInput = document.getElementById("message");
+    const timer = document.getElementById("timer").value;
 
-    document.getElementById("messages").innerHTML = "";
+    if (!recipient || !messageInput.value) return;
 
-    document.getElementById("chat-box").style.display = "none";
-    document.getElementById("auth-box").style.display = "block";
+    const encrypted = encrypt(messageInput.value, passkey);
+
+    socket.emit("send-message", {
+        to: recipient,
+        message: encrypted,
+        timer
+    });
+
+    addMessage(`You: ${messageInput.value}`);
+
+    messageInput.value = "";
 }
 
-/* SEND MESSAGE */
-async function sendMessage() {
-    const receiver = document.getElementById("receiver").value.trim();
-    const message = document.getElementById("message").value.trim();
-
-    if (!receiver || !message || !currentPasskey) {
-        alert("Receiver, passkey and message required");
+socket.on("receive-message", (data) => {
+    if (!passkey) {
+        alert("Set passkey first");
         return;
     }
 
     try {
-        const cipherText = await encryptMessage(
-            message,
-            currentPasskey
-        );
+        const decrypted = decrypt(data.message, passkey);
 
-        socket.emit("secure-message", {
-            sender: currentUser,
-            receiver,
-            cipherText
-        });
+        addMessage(`${data.from}: ${decrypted}`);
 
-        // Show own message instantly
-        addMessage("You", message);
-
-        document.getElementById("message").value = "";
-
-    } catch (error) {
-        console.error("Encryption failed:", error);
-    }
-}
-
-/* RECEIVE LIVE MESSAGE */
-socket.on("receive-message", async (data) => {
-    try {
-        if (!currentPasskey) {
-            alert("Passkey missing. Cannot decrypt.");
-            return;
+        if (data.timer) {
+            setTimeout(() => {
+                const messages = document.getElementById("messages");
+                if (messages.lastChild) {
+                    messages.removeChild(messages.lastChild);
+                }
+            }, data.timer * 1000);
         }
-
-        const plain = await decryptMessage(
-            data.cipherText,
-            currentPasskey
-        );
-
-        addMessage(data.sender, plain);
-
-    } catch (error) {
-        console.log("Failed to decrypt live message");
+    } catch {
+        addMessage(`${data.from}: [Wrong passkey]`);
     }
 });
 
-/* LOAD HISTORY */
-socket.on("history", async (messages) => {
-    const messagesBox = document.getElementById("messages");
-    messagesBox.innerHTML = "";
-
-    for (let msg of messages) {
-        try {
-            const plain = await decryptMessage(
-                msg.cipherText,
-                currentPasskey
-            );
-
-            addMessage(msg.sender, plain);
-
-        } catch {
-            console.log("Skipped undecryptable history");
-        }
-    }
-});
-
-/* PRESENCE */
 socket.on("presence", (users) => {
-    document.getElementById("online-users").innerText =
+    document.getElementById("presence").innerText =
         "Online: " + users.join(", ");
 });
 
-/* ADD MESSAGE TO UI */
-function addMessage(sender, text) {
-    const div = document.createElement("div");
-    div.className = "message";
+function addMessage(text) {
+    const msg = document.createElement("div");
+    msg.className = "msg";
+    msg.innerText = text;
 
-    div.innerHTML = `
-        <strong>${sender}</strong><br>
-        ${text}
-    `;
+    document.getElementById("messages").appendChild(msg);
+}
 
-    document.getElementById("messages").appendChild(div);
+function logout() {
+    localStorage.clear();
+    location.reload();
+}
 
-    // Auto-scroll
-    const box = document.getElementById("messages");
-    box.scrollTop = box.scrollHeight;
+function panic() {
+    localStorage.clear();
+    document.getElementById("messages").innerHTML = "";
+    location.reload();
 }

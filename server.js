@@ -1,69 +1,66 @@
-require("dotenv").config();
-
 const express = require("express");
 const http = require("http");
+const socketIo = require("socket.io");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
-const { Server } = require("socket.io");
+const path = require("path");
+require("dotenv").config();
 
 const User = require("./models/User");
-const Message = require("./models/Message");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 
-// Middleware
+const io = socketIo(server);
+
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 
-// Root route
-app.get("/", (req, res) => {
-    res.sendFile(__dirname + "/public/index.html");
-});
-
-// MongoDB connect
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("MongoDB connected"))
-.catch((err) => console.log("MongoDB error:", err));
+    .then(() => console.log("MongoDB connected"))
+    .catch(err => console.log("MongoDB error:", err));
 
-// Store online users
-let onlineUsers = {};
+const onlineUsers = {};
+const offlineMessages = {};
 
-/* SIGNUP */
 app.post("/signup", async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, email, password } = req.body;
 
-        const existingUser = await User.findOne({ username });
+        const existing = await User.findOne({
+            $or: [{ username }, { email }]
+        });
 
-        if (existingUser) {
+        if (existing) {
             return res.status(400).json({
-                message: "Username already exists"
+                success: false,
+                message: "User already exists"
             });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await User.create({
+        const newUser = new User({
             username,
+            email,
             password: hashedPassword
         });
 
+        await newUser.save();
+
         res.json({
+            success: true,
             message: "Signup successful"
         });
 
     } catch (error) {
-        console.log(error);
-
         res.status(500).json({
+            success: false,
             message: "Signup failed"
         });
     }
 });
 
-/* LOGIN */
 app.post("/login", async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -72,108 +69,82 @@ app.post("/login", async (req, res) => {
 
         if (!user) {
             return res.status(400).json({
+                success: false,
                 message: "User not found"
             });
         }
 
-        const validPassword = await bcrypt.compare(
-            password,
-            user.password
-        );
+        const match = await bcrypt.compare(password, user.password);
 
-        if (!validPassword) {
+        if (!match) {
             return res.status(400).json({
-                message: "Invalid password"
+                success: false,
+                message: "Wrong password"
             });
         }
 
         res.json({
+            success: true,
             message: "Login successful"
         });
 
     } catch (error) {
-        console.log(error);
-
         res.status(500).json({
+            success: false,
             message: "Login failed"
         });
     }
 });
 
-/* SOCKETS */
 io.on("connection", (socket) => {
     console.log("New connection:", socket.id);
 
-    // Join user
     socket.on("join", (username) => {
+        socket.username = username;
         onlineUsers[username] = socket.id;
 
         console.log(`${username} joined`);
 
-        io.emit("presence", Object.keys(onlineUsers));
-    });
-
-    // Secure message
-    socket.on("secure-message", async (data) => {
-        try {
-            const { sender, receiver, cipherText } = data;
-
-            console.log("Message:", sender, "->", receiver);
-
-            // Save in DB
-            await Message.create({
-                sender,
-                receiver,
-                cipherText
+        if (offlineMessages[username]) {
+            offlineMessages[username].forEach(msg => {
+                socket.emit("receive-message", msg);
             });
 
-            // Deliver live if online
-            if (onlineUsers[receiver]) {
-                io.to(onlineUsers[receiver]).emit(
-                    "receive-message",
-                    data
-                );
-            }
-
-        } catch (error) {
-            console.log("Message error:", error);
-        }
-    });
-
-    // Load old messages
-    socket.on("load-history", async (username) => {
-        try {
-            const history = await Message.find({
-                $or: [
-                    { sender: username },
-                    { receiver: username }
-                ]
-            }).sort({ createdAt: 1 });
-
-            socket.emit("history", history);
-
-        } catch (error) {
-            console.log("History error:", error);
-        }
-    });
-
-    // Disconnect
-    socket.on("disconnect", () => {
-        console.log("Disconnected:", socket.id);
-
-        for (let username in onlineUsers) {
-            if (onlineUsers[username] === socket.id) {
-                delete onlineUsers[username];
-                break;
-            }
+            delete offlineMessages[username];
         }
 
         io.emit("presence", Object.keys(onlineUsers));
+    });
+
+    socket.on("send-message", ({ to, message, timer }) => {
+        const payload = {
+            from: socket.username,
+            message,
+            timer
+        };
+
+        if (onlineUsers[to]) {
+            io.to(onlineUsers[to]).emit("receive-message", payload);
+        } else {
+            if (!offlineMessages[to]) {
+                offlineMessages[to] = [];
+            }
+
+            offlineMessages[to].push(payload);
+        }
+    });
+
+    socket.on("disconnect", () => {
+        if (socket.username) {
+            delete onlineUsers[socket.username];
+            io.emit("presence", Object.keys(onlineUsers));
+        }
+
+        console.log("Disconnected:", socket.id);
     });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
     console.log(`CipherChat running on port ${PORT}`);
